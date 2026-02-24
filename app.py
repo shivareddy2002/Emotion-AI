@@ -1,79 +1,89 @@
 from flask import Flask, render_template, request, jsonify
-import numpy as np
+import os
 import re
-from tensorflow.keras.preprocessing.sequence import pad_sequences
+import requests
+
 from model_loader import load_emotion_assets
 
 app = Flask(__name__)
 
-# --- Initialize AI Engine ---
-# Load assets globally so they stay in memory for fast inference
-MODEL, TOKENIZER, LABEL_ENCODER = load_emotion_assets()
+# --- Runtime mode ---
+# In Vercel, set USE_LOCAL_MODEL=false and provide REMOTE_INFERENCE_URL to avoid heavy ML dependencies.
+USE_LOCAL_MODEL = os.getenv("USE_LOCAL_MODEL", "true").lower() == "true"
+REMOTE_INFERENCE_URL = os.getenv("REMOTE_INFERENCE_URL", "").strip()
 MAX_LENGTH = 40
 
+MODEL, TOKENIZER, LABEL_ENCODER = None, None, None
+pad_sequences = None
+
+if USE_LOCAL_MODEL:
+    from tensorflow.keras.preprocessing.sequence import pad_sequences as keras_pad_sequences
+
+    MODEL, TOKENIZER, LABEL_ENCODER = load_emotion_assets()
+    pad_sequences = keras_pad_sequences
+
+
 def clean_text(text):
-    """
-    Standardizes input text to match the preprocessing done during training.
-    """
+    """Standardizes input text to match the preprocessing done during training."""
     text = text.lower()
     text = re.sub(r"[^a-zA-Z\s]", "", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
-# --- Page Routes ---
 
+# --- Page Routes ---
 @app.route('/')
 def home():
-    """Render the main Analyzer page."""
     return render_template('index.html')
+
 
 @app.route('/about')
 def about():
-    """Render the project information page."""
     return render_template('about.html')
+
 
 @app.route('/workflow')
 def workflow():
-    """Render the technical pipeline explanation page."""
     return render_template('workflow.html')
 
-# --- API Route for Predictions ---
 
+# --- API Route for Predictions ---
 @app.route('/predict', methods=['POST'])
 def predict():
-    """
-    Handles AJAX requests from the frontend, processes text, 
-    and returns emotion predictions.
-    """
-    if MODEL is None:
-        return jsonify({'error': 'Model not loaded on server'}), 500
-
-    data = request.get_json()
+    data = request.get_json() or {}
     user_text = data.get('text', '')
-    
+
     if not user_text.strip():
         return jsonify({'error': 'No text provided'}), 400
 
-    # 1. Preprocess
+    if not USE_LOCAL_MODEL:
+        if not REMOTE_INFERENCE_URL:
+            return jsonify({'error': 'REMOTE_INFERENCE_URL is not configured'}), 500
+
+        try:
+            response = requests.post(
+                REMOTE_INFERENCE_URL,
+                json={'text': user_text},
+                timeout=20,
+            )
+            return jsonify(response.json()), response.status_code
+        except requests.RequestException as exc:
+            return jsonify({'error': f'Remote inference failed: {exc}'}), 502
+
+    if MODEL is None:
+        return jsonify({'error': 'Model not loaded on server'}), 500
+
     cleaned_text = clean_text(user_text)
-    
-    # 2. Tokenize & Pad
     sequence = TOKENIZER.texts_to_sequences([cleaned_text])
     padded_sequence = pad_sequences(sequence, maxlen=MAX_LENGTH, padding='post')
-    
-    # 3. Model Inference
     prediction_scores = MODEL.predict(padded_sequence, verbose=0)
-    class_index = np.argmax(prediction_scores)
-    
-    # 4. Decode Result
-    emotion = LABEL_ENCODER.inverse_transform([class_index])[0]
-    confidence = float(np.max(prediction_scores))
 
-    return jsonify({
-        'emotion': emotion,
-        'confidence': f"{confidence*100:.2f}%"
-    })
+    class_index = prediction_scores.argmax()
+    emotion = LABEL_ENCODER.inverse_transform([class_index])[0]
+    confidence = float(prediction_scores.max())
+
+    return jsonify({'emotion': emotion, 'confidence': f"{confidence * 100:.2f}%"})
+
 
 if __name__ == '__main__':
-    # Local execution
     app.run(debug=True)

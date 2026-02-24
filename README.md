@@ -204,3 +204,31 @@ It highlights the power of NLP in real-world applications such as customer servi
 <p align="center">
   <img src="https://capsule-render.vercel.app/api?type=waving&color=0:2575fc,100:6a11cb&height=120&section=footer"/>
 </p>
+
+
+## ☁️ Deploy on Vercel Without "Project Size Exceeded"
+
+Vercel serverless functions have strict bundle limits, and `tensorflow-cpu` is usually too large.
+
+This repository now supports two modes:
+
+1. **Local mode (default)**: uses TensorFlow model files directly.
+2. **Vercel mode**: skips TensorFlow and forwards inference requests to a remote API.
+
+### Steps
+
+1. Deploy a small Python API for model inference on a platform that supports heavy ML dependencies (Render/Railway/EC2).
+2. In Vercel project settings, add:
+   - `USE_LOCAL_MODEL=false`
+   - `REMOTE_INFERENCE_URL=https://your-ml-api.example.com/predict`
+3. Deploy this repo to Vercel. It installs only `requirements-vercel.txt`, which avoids large ML packages.
+
+### Local development
+
+Use local dependencies when running model inference in the same process:
+
+```bash
+pip install -r requirements-local.txt
+python app.py
+```
+
