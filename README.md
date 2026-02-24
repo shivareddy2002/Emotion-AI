@@ -204,3 +204,87 @@ It highlights the power of NLP in real-world applications such as customer servi
 <p align="center">
   <img src="https://capsule-render.vercel.app/api?type=waving&color=0:2575fc,100:6a11cb&height=120&section=footer"/>
 </p>
+
+
+## ☁️ Deploy on Vercel Without "Project Size Exceeded"
+
+Vercel serverless functions have strict bundle limits, and `tensorflow-cpu` is usually too large.
+
+This repository now supports two modes:
+
+1. **Local mode**: uses TensorFlow model files directly.
+2. **Vercel mode (default on Vercel)**: skips TensorFlow and forwards inference requests to a remote API.
+
+### Steps
+
+1. Deploy a small Python API for model inference on a platform that supports heavy ML dependencies (Render/Railway/EC2).
+2. In Vercel project settings, add:
+   - `USE_LOCAL_MODEL=false`
+   - `REMOTE_INFERENCE_URL=https://your-ml-api.example.com/predict`
+3. Deploy this repo to Vercel. It installs only `requirements-vercel.txt`, which avoids large ML packages.
+
+### Local development
+
+Use local dependencies when running model inference in the same process:
+
+```bash
+pip install -r requirements-local.txt
+python app.py
+```
+
+
+
+### Troubleshooting deployed crashes
+
+If Vercel shows `FUNCTION_INVOCATION_FAILED`:
+
+1. Open `https://<your-domain>/health` and verify:
+   - `use_local_model` is `false` on Vercel
+   - `remote_inference_configured` is `true`
+2. In Vercel Project Settings → Environment Variables, set:
+   - `USE_LOCAL_MODEL=false`
+   - `REMOTE_INFERENCE_URL=https://your-ml-api.example.com/predict`
+3. Redeploy after saving env vars.
+
+
+### Analyze button shows no results?
+
+If `/predict` cannot reach your remote inference API, the app now returns a lightweight fallback prediction so the UI still responds.
+For production-quality predictions, configure `REMOTE_INFERENCE_URL` to your ML service and keep `USE_LOCAL_MODEL=false` on Vercel.
+
+
+Remote API payload should include either `{emotion, confidence}` or `{label, score}`. If payload is invalid, the app automatically falls back to lightweight local keyword prediction.
+
+
+
+### Get best prediction quality
+
+For highest quality predictions in production:
+
+1. Prefer a dedicated remote inference service with your trained TensorFlow model.
+2. Set `REMOTE_INFERENCE_URL` in Vercel to that endpoint.
+3. Keep `USE_LOCAL_MODEL=false` on Vercel to avoid serverless crashes and size limits.
+4. Use `/health` to verify runtime status (`remote_inference_configured=true`).
+
+If remote service is unavailable, the app will safely fall back to the built-in lite model.
+
+
+
+### If Vercel still shows `FUNCTION_INVOCATION_FAILED`
+
+1. Ensure `vercel.json` includes `templates/**` and `static/**` in `includeFiles` for `@vercel/python`.
+2. Keep `USE_LOCAL_MODEL=false` on Vercel unless TensorFlow and model files are actually available.
+3. Check `https://<your-domain>/health` after deploy; it should return JSON (not crash page).
+4. If root route fails, verify templates are deployed (missing templates cause serverless 500s).
+
+
+
+### Why preview branch works but `main` fails on Vercel
+
+A common root cause is **different Vercel environment configuration between Preview and Production** after merge:
+
+- Preview deployment may have `REMOTE_INFERENCE_URL` configured while Production does not.
+- Production may still have stale `USE_LOCAL_MODEL=true` from older deploys.
+- Build packaging can differ if `vercel.json` changes were not merged cleanly.
+
+After merging to `main`, verify Production env values in Vercel Project Settings and redeploy Production.
