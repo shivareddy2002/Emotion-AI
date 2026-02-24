@@ -254,3 +254,16 @@ For production-quality predictions, configure `REMOTE_INFERENCE_URL` to your ML 
 
 
 Remote API payload should include either `{emotion, confidence}` or `{label, score}`. If payload is invalid, the app automatically falls back to lightweight local keyword prediction.
+
+
+
+### Get best prediction quality
+
+For highest quality predictions in production:
+
+1. Prefer a dedicated remote inference service with your trained TensorFlow model.
+2. Set `REMOTE_INFERENCE_URL` in Vercel to that endpoint.
+3. Keep `USE_LOCAL_MODEL=false` on Vercel to avoid serverless crashes and size limits.
+4. Use `/health` to verify runtime status (`remote_inference_configured=true`).
+
+If remote service is unavailable, the app will safely fall back to the built-in lite model.
