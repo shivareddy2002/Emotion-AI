@@ -267,3 +267,23 @@ For highest quality predictions in production:
 4. Use `/health` to verify runtime status (`remote_inference_configured=true`).
 
 If remote service is unavailable, the app will safely fall back to the built-in lite model.
+
+### If Vercel still shows `FUNCTION_INVOCATION_FAILED`
+
+1. Ensure `vercel.json` includes `templates/**` and `static/**` in `includeFiles` for `@vercel/python`.
+2. Keep `USE_LOCAL_MODEL=false` on Vercel unless TensorFlow and model files are actually available.
+3. Check `https://<your-domain>/health` after deploy; it should return JSON (not crash page).
+4. If root route fails, verify templates are deployed (missing templates cause serverless 500s).
+
+
+
+### Why preview branch works but `main` fails on Vercel
+
+A common root cause is **different Vercel environment configuration between Preview and Production** after merge:
+
+- Preview deployment may have `REMOTE_INFERENCE_URL` configured while Production does not.
+- Production may still have stale `USE_LOCAL_MODEL=true` from older deploys.
+- Build packaging can differ if `vercel.json` changes were not merged cleanly.
+
+After merging to `main`, verify Production env values in Vercel Project Settings and redeploy Production.
+

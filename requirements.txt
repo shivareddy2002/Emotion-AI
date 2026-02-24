@@ -1,3 +1,6 @@
 flask
 gunicorn
+<<<<<<< codex/fix-project-size-exceeded-error-on-vercel
+=======
 requests
+>>>>>>> main
