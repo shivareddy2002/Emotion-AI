@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify
 import os
 import re
+
 import requests
 
 from model_loader import load_emotion_assets
@@ -8,6 +9,9 @@ from model_loader import load_emotion_assets
 app = Flask(__name__)
 
 # --- Runtime mode ---
+# On Vercel, default to remote mode so missing TensorFlow doesn't crash the function.
+DEFAULT_USE_LOCAL_MODEL = "false" if os.getenv("VERCEL") else "true"
+USE_LOCAL_MODEL = os.getenv("USE_LOCAL_MODEL", DEFAULT_USE_LOCAL_MODEL).lower() == "true"
 # In Vercel, set USE_LOCAL_MODEL=false and provide REMOTE_INFERENCE_URL to avoid heavy ML dependencies.
 USE_LOCAL_MODEL = os.getenv("USE_LOCAL_MODEL", "true").lower() == "true"
 REMOTE_INFERENCE_URL = os.getenv("REMOTE_INFERENCE_URL", "").strip()
@@ -15,6 +19,17 @@ MAX_LENGTH = 40
 
 MODEL, TOKENIZER, LABEL_ENCODER = None, None, None
 pad_sequences = None
+STARTUP_ERROR = None
+
+if USE_LOCAL_MODEL:
+    try:
+        from tensorflow.keras.preprocessing.sequence import pad_sequences as keras_pad_sequences
+
+        MODEL, TOKENIZER, LABEL_ENCODER = load_emotion_assets()
+        pad_sequences = keras_pad_sequences
+    except Exception as exc:
+        STARTUP_ERROR = f"Local model initialization failed: {exc}"
+        USE_LOCAL_MODEL = False
 
 if USE_LOCAL_MODEL:
     from tensorflow.keras.preprocessing.sequence import pad_sequences as keras_pad_sequences
@@ -47,6 +62,16 @@ def workflow():
     return render_template('workflow.html')
 
 
+@app.route('/health')
+def health():
+    status = {
+        'use_local_model': USE_LOCAL_MODEL,
+        'remote_inference_configured': bool(REMOTE_INFERENCE_URL),
+        'startup_error': STARTUP_ERROR,
+    }
+    return jsonify(status), 200
+
+
 # --- API Route for Predictions ---
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -58,6 +83,11 @@ def predict():
 
     if not USE_LOCAL_MODEL:
         if not REMOTE_INFERENCE_URL:
+            return jsonify(
+                {
+                    'error': 'REMOTE_INFERENCE_URL is not configured. Set USE_LOCAL_MODEL=true only where TensorFlow is installed.'
+                }
+            ), 500
             return jsonify({'error': 'REMOTE_INFERENCE_URL is not configured'}), 500
 
         try:
@@ -70,6 +100,8 @@ def predict():
         except requests.RequestException as exc:
             return jsonify({'error': f'Remote inference failed: {exc}'}), 502
 
+    if MODEL is None or pad_sequences is None:
+        return jsonify({'error': 'Model not loaded on server', 'detail': STARTUP_ERROR}), 500
     if MODEL is None:
         return jsonify({'error': 'Model not loaded on server'}), 500
 
