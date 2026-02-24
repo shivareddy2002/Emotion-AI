@@ -188,8 +188,6 @@ def predict():
     fallback = fallback_predict(user_text)
     if USE_LOCAL_MODEL and STARTUP_ERROR:
         fallback['warning'] = f'Local model unavailable. Using built-in lite model. ({STARTUP_ERROR})'
-    else:
-        fallback['warning'] = 'Using built-in lite model. Configure REMOTE_INFERENCE_URL or enable local model for best accuracy.'
     return jsonify(fallback), 200
 
 
