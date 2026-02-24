@@ -4,3 +4,4 @@ tensorflow-cpu
 numpy
 scikit-learn
 pandas
+requests

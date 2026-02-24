@@ -268,8 +268,6 @@ For highest quality predictions in production:
 
 If remote service is unavailable, the app will safely fall back to the built-in lite model.
 
-
-
 ### If Vercel still shows `FUNCTION_INVOCATION_FAILED`
 
 1. Ensure `vercel.json` includes `templates/**` and `static/**` in `includeFiles` for `@vercel/python`.
@@ -288,3 +286,4 @@ A common root cause is **different Vercel environment configuration between Prev
 - Build packaging can differ if `vercel.json` changes were not merged cleanly.
 
 After merging to `main`, verify Production env values in Vercel Project Settings and redeploy Production.
+

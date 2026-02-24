@@ -5,13 +5,13 @@
       "src": "app.py",
       "use": "@vercel/python",
       "config": {
-        "installCommand": "pip install -r requirements-vercel.txt",
-        "includeFiles": [
-          "templates/**",
-          "static/**",
-          "tokenizer.pkl",
-          "label_encoder.pkl"
-        ]
+"installCommand": "pip install -r requirements-vercel.txt",
+"includeFiles": [
+  "templates/**",
+  "static/**",
+  "tokenizer.pkl",
+  "label_encoder.pkl"
+]
       }
     }
   ],
