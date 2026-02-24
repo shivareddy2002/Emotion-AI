@@ -87,6 +87,7 @@ def fallback_predict(text):
     return {'emotion': best_emotion, 'confidence': f'{confidence:.2f}%', 'source': 'lite-model'}
 
 
+# --- Page Routes ---
 @app.route('/')
 def home():
     return render_template('index.html')
@@ -112,6 +113,17 @@ def health():
     return jsonify(status), 200
 
 
+@app.route('/health')
+def health():
+    status = {
+        'use_local_model': USE_LOCAL_MODEL,
+        'remote_inference_configured': bool(REMOTE_INFERENCE_URL),
+        'startup_error': STARTUP_ERROR,
+    }
+    return jsonify(status), 200
+
+
+# --- API Route for Predictions ---
 @app.route('/predict', methods=['POST'])
 def predict():
     data = request.get_json() or {}
