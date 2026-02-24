@@ -10,8 +10,8 @@ A professional deep learning web application that detects human emotions from te
 
 - 🔮 Real-time emotion prediction  
 - 🧠 BiLSTM-powered deep learning model  
-- 🎭 Supports 6 emotions:  
-  😊 **Joy** | 😢 **Sadness** | 😡 **Anger** | 😨 **Fear** | 💙 **Love** | 😲 **Surprise**
+- 🎭 Supports 7 emotions:  
+  😊 **Joy** | 😢 **Sadness** | 😡 **Anger** | 😨 **Fear** | 💙 **Love** | 😲 **Surprise** | 😐 **Neutral**
 
 - 🌐 Interactive Flask web interface  
 
