@@ -47,11 +47,11 @@ async function analyzeEmotion() {
         confidenceBar.setAttribute('aria-valuenow', String(confValue));
 
         if (data.warning) {
-            statusNode.className = 'mt-2 small text-warning';
+            statusNode.className = 'mt-2 small text-info';
             statusNode.innerText = data.warning;
         } else {
             statusNode.className = 'mt-2 small text-success';
-            statusNode.innerText = data.source === 'fallback' ? 'Showing fallback prediction.' : 'Prediction completed.';
+            statusNode.innerText = data.source === 'lite-model' ? 'Prediction completed using built-in lite model.' : 'Prediction completed.';
         }
 
         resultDiv.classList.remove('d-none');

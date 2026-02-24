@@ -39,30 +39,52 @@ def clean_text(text):
 
 
 def fallback_predict(text):
-    """Lightweight keyword fallback so UI keeps working without remote/local ML service."""
+    """Lightweight lexicon fallback with phrase boosts and negation handling."""
     cleaned = clean_text(text)
+    words = cleaned.split()
+
     lexicon = {
-        'joy': ['happy', 'great', 'excited', 'awesome', 'fantastic', 'smile', 'good', 'wonderful'],
-        'sadness': ['sad', 'down', 'upset', 'depressed', 'cry', 'tears', 'lonely', 'hurt'],
-        'anger': ['angry', 'mad', 'furious', 'annoyed', 'hate', 'rage', 'irritated'],
-        'fear': ['afraid', 'fear', 'scared', 'terrified', 'anxious', 'worried', 'panic'],
-        'love': ['love', 'adore', 'dear', 'sweetheart', 'care', 'romantic', 'cherish'],
-        'surprise': ['wow', 'surprised', 'unexpected', 'shocked', 'amazing', 'unbelievable'],
+        'joy': {'happy': 1.4, 'great': 1.2, 'excited': 1.4, 'awesome': 1.4, 'fantastic': 1.5, 'smile': 1.0, 'good': 0.8, 'wonderful': 1.5, 'glad': 1.0},
+        'sadness': {'sad': 1.4, 'empty': 1.4, 'pointless': 1.5, 'down': 1.0, 'upset': 1.2, 'depressed': 1.6, 'cry': 1.2, 'tears': 1.2, 'lonely': 1.4, 'hurt': 1.1},
+        'anger': {'angry': 1.5, 'mad': 1.2, 'furious': 1.6, 'annoyed': 1.1, 'hate': 1.5, 'rage': 1.5, 'irritated': 1.2},
+        'fear': {'afraid': 1.4, 'fear': 1.2, 'scared': 1.5, 'terrified': 1.6, 'anxious': 1.3, 'worried': 1.1, 'panic': 1.5},
+        'love': {'love': 1.7, 'adore': 1.7, 'dear': 1.0, 'sweetheart': 1.3, 'care': 1.1, 'romantic': 1.4, 'cherish': 1.5},
+        'surprise': {'wow': 1.3, 'surprised': 1.4, 'unexpected': 1.4, 'shocked': 1.5, 'amazing': 1.2, 'unbelievable': 1.4},
     }
 
-    scores = {emotion: 0 for emotion in lexicon}
-    words = cleaned.split()
-    for word in words:
+    phrase_boosts = {
+        'love': ['i love', 'love you', 'in love', 'miss you'],
+        'sadness': ['feel empty', 'pointless and empty', 'feel hopeless', 'broken inside'],
+        'joy': ['so happy', 'very happy', 'feeling great'],
+        'anger': ['so angry', 'very angry', 'makes me mad'],
+        'fear': ['so scared', 'very scared', 'panic attack'],
+        'surprise': ['did not expect', 'never expected', 'what a surprise'],
+    }
+
+    negations = {'not', 'never', 'no', "can't", "dont", "don't"}
+    scores = {emotion: 0.0 for emotion in lexicon}
+
+    for idx, word in enumerate(words):
+        prev = words[idx - 1] if idx > 0 else ''
+        negated = prev in negations
         for emotion, terms in lexicon.items():
-            if word in terms:
-                scores[emotion] += 1
+            weight = terms.get(word)
+            if weight:
+                scores[emotion] += (-0.6 * weight) if negated else weight
 
-    if all(score == 0 for score in scores.values()):
-        return {'emotion': 'neutral', 'confidence': '51.00%', 'source': 'fallback'}
+    for emotion, phrases in phrase_boosts.items():
+        for phrase in phrases:
+            if phrase in cleaned:
+                scores[emotion] += 1.8
 
-    emotion = max(scores, key=scores.get)
-    confidence = min(95.0, 60.0 + (scores[emotion] * 10.0))
-    return {'emotion': emotion, 'confidence': f'{confidence:.2f}%', 'source': 'fallback'}
+    best_emotion = max(scores, key=scores.get)
+    best_score = scores[best_emotion]
+    if best_score <= 0:
+        return {'emotion': 'neutral', 'confidence': '55.00%', 'source': 'lite-model'}
+
+    total_positive = sum(max(0.0, s) for s in scores.values())
+    confidence = 55.0 if total_positive == 0 else min(96.0, 55.0 + (best_score / total_positive) * 40.0)
+    return {'emotion': best_emotion, 'confidence': f'{confidence:.2f}%', 'source': 'lite-model'}
 
 
 @app.route('/')
@@ -101,7 +123,7 @@ def predict():
     if not USE_LOCAL_MODEL:
         if not REMOTE_INFERENCE_URL:
             fallback = fallback_predict(user_text)
-            fallback['warning'] = 'REMOTE_INFERENCE_URL is not configured. Showing fallback prediction.'
+            fallback['warning'] = 'Using built-in lite model because remote inference is not configured.'
             return jsonify(fallback), 200
 
         try:
