@@ -12,6 +12,8 @@ app = Flask(__name__)
 # On Vercel, default to remote mode so missing TensorFlow doesn't crash the function.
 DEFAULT_USE_LOCAL_MODEL = "false" if os.getenv("VERCEL") else "true"
 USE_LOCAL_MODEL = os.getenv("USE_LOCAL_MODEL", DEFAULT_USE_LOCAL_MODEL).lower() == "true"
+# In Vercel, set USE_LOCAL_MODEL=false and provide REMOTE_INFERENCE_URL to avoid heavy ML dependencies.
+USE_LOCAL_MODEL = os.getenv("USE_LOCAL_MODEL", "true").lower() == "true"
 REMOTE_INFERENCE_URL = os.getenv("REMOTE_INFERENCE_URL", "").strip()
 MAX_LENGTH = 40
 
@@ -29,6 +31,12 @@ if USE_LOCAL_MODEL:
         STARTUP_ERROR = f"Local model initialization failed: {exc}"
         USE_LOCAL_MODEL = False
 
+if USE_LOCAL_MODEL:
+    from tensorflow.keras.preprocessing.sequence import pad_sequences as keras_pad_sequences
+
+    MODEL, TOKENIZER, LABEL_ENCODER = load_emotion_assets()
+    pad_sequences = keras_pad_sequences
+
 
 def clean_text(text):
     """Standardizes input text to match the preprocessing done during training."""
@@ -38,33 +46,7 @@ def clean_text(text):
     return text.strip()
 
 
-def fallback_predict(text):
-    """Lightweight keyword fallback so UI keeps working without remote/local ML service."""
-    cleaned = clean_text(text)
-    lexicon = {
-        'joy': ['happy', 'great', 'excited', 'awesome', 'fantastic', 'smile', 'good', 'wonderful'],
-        'sadness': ['sad', 'down', 'upset', 'depressed', 'cry', 'tears', 'lonely', 'hurt'],
-        'anger': ['angry', 'mad', 'furious', 'annoyed', 'hate', 'rage', 'irritated'],
-        'fear': ['afraid', 'fear', 'scared', 'terrified', 'anxious', 'worried', 'panic'],
-        'love': ['love', 'adore', 'dear', 'sweetheart', 'care', 'romantic', 'cherish'],
-        'surprise': ['wow', 'surprised', 'unexpected', 'shocked', 'amazing', 'unbelievable'],
-    }
-
-    scores = {emotion: 0 for emotion in lexicon}
-    words = cleaned.split()
-    for word in words:
-        for emotion, terms in lexicon.items():
-            if word in terms:
-                scores[emotion] += 1
-
-    if all(score == 0 for score in scores.values()):
-        return {'emotion': 'neutral', 'confidence': '51.00%', 'source': 'fallback'}
-
-    emotion = max(scores, key=scores.get)
-    confidence = min(95.0, 60.0 + (scores[emotion] * 10.0))
-    return {'emotion': emotion, 'confidence': f'{confidence:.2f}%', 'source': 'fallback'}
-
-
+# --- Page Routes ---
 @app.route('/')
 def home():
     return render_template('index.html')
@@ -90,6 +72,7 @@ def health():
     return jsonify(status), 200
 
 
+# --- API Route for Predictions ---
 @app.route('/predict', methods=['POST'])
 def predict():
     data = request.get_json() or {}
@@ -100,9 +83,12 @@ def predict():
 
     if not USE_LOCAL_MODEL:
         if not REMOTE_INFERENCE_URL:
-            fallback = fallback_predict(user_text)
-            fallback['warning'] = 'REMOTE_INFERENCE_URL is not configured. Showing fallback prediction.'
-            return jsonify(fallback), 200
+            return jsonify(
+                {
+                    'error': 'REMOTE_INFERENCE_URL is not configured. Set USE_LOCAL_MODEL=true only where TensorFlow is installed.'
+                }
+            ), 500
+            return jsonify({'error': 'REMOTE_INFERENCE_URL is not configured'}), 500
 
         try:
             response = requests.post(
@@ -110,18 +96,14 @@ def predict():
                 json={'text': user_text},
                 timeout=20,
             )
-            response.raise_for_status()
-            payload = response.json()
-            return jsonify(payload), 200
+            return jsonify(response.json()), response.status_code
         except requests.RequestException as exc:
-            fallback = fallback_predict(user_text)
-            fallback['warning'] = f'Remote inference failed, fallback used: {exc}'
-            return jsonify(fallback), 200
+            return jsonify({'error': f'Remote inference failed: {exc}'}), 502
 
     if MODEL is None or pad_sequences is None:
-        fallback = fallback_predict(user_text)
-        fallback['warning'] = f'Model not loaded, fallback used: {STARTUP_ERROR}'
-        return jsonify(fallback), 200
+        return jsonify({'error': 'Model not loaded on server', 'detail': STARTUP_ERROR}), 500
+    if MODEL is None:
+        return jsonify({'error': 'Model not loaded on server'}), 500
 
     cleaned_text = clean_text(user_text)
     sequence = TOKENIZER.texts_to_sequences([cleaned_text])
@@ -132,7 +114,7 @@ def predict():
     emotion = LABEL_ENCODER.inverse_transform([class_index])[0]
     confidence = float(prediction_scores.max())
 
-    return jsonify({'emotion': emotion, 'confidence': f"{confidence * 100:.2f}%", 'source': 'model'})
+    return jsonify({'emotion': emotion, 'confidence': f"{confidence * 100:.2f}%"})
 
 
 if __name__ == '__main__':
