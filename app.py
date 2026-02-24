@@ -12,6 +12,8 @@ app = Flask(__name__)
 # On Vercel, default to remote mode so missing TensorFlow doesn't crash the function.
 DEFAULT_USE_LOCAL_MODEL = "false" if os.getenv("VERCEL") else "true"
 USE_LOCAL_MODEL = os.getenv("USE_LOCAL_MODEL", DEFAULT_USE_LOCAL_MODEL).lower() == "true"
+# In Vercel, set USE_LOCAL_MODEL=false and provide REMOTE_INFERENCE_URL to avoid heavy ML dependencies.
+USE_LOCAL_MODEL = os.getenv("USE_LOCAL_MODEL", "true").lower() == "true"
 REMOTE_INFERENCE_URL = os.getenv("REMOTE_INFERENCE_URL", "").strip()
 MAX_LENGTH = 40
 
@@ -29,6 +31,12 @@ if USE_LOCAL_MODEL:
         STARTUP_ERROR = f"Local model initialization failed: {exc}"
         USE_LOCAL_MODEL = False
 
+if USE_LOCAL_MODEL:
+    from tensorflow.keras.preprocessing.sequence import pad_sequences as keras_pad_sequences
+
+    MODEL, TOKENIZER, LABEL_ENCODER = load_emotion_assets()
+    pad_sequences = keras_pad_sequences
+
 
 def clean_text(text):
     """Standardizes input text to match the preprocessing done during training."""
@@ -38,6 +46,7 @@ def clean_text(text):
     return text.strip()
 
 
+# --- Page Routes ---
 @app.route('/')
 def home():
     return render_template('index.html')
@@ -63,6 +72,7 @@ def health():
     return jsonify(status), 200
 
 
+# --- API Route for Predictions ---
 @app.route('/predict', methods=['POST'])
 def predict():
     data = request.get_json() or {}
@@ -78,6 +88,7 @@ def predict():
                     'error': 'REMOTE_INFERENCE_URL is not configured. Set USE_LOCAL_MODEL=true only where TensorFlow is installed.'
                 }
             ), 500
+            return jsonify({'error': 'REMOTE_INFERENCE_URL is not configured'}), 500
 
         try:
             response = requests.post(
@@ -91,6 +102,8 @@ def predict():
 
     if MODEL is None or pad_sequences is None:
         return jsonify({'error': 'Model not loaded on server', 'detail': STARTUP_ERROR}), 500
+    if MODEL is None:
+        return jsonify({'error': 'Model not loaded on server'}), 500
 
     cleaned_text = clean_text(user_text)
     sequence = TOKENIZER.texts_to_sequences([cleaned_text])
