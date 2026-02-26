@@ -51,7 +51,7 @@ async function analyzeEmotion() {
             statusNode.innerText = data.warning;
         } else {
             statusNode.className = 'mt-2 small text-success';
-            statusNode.innerText = data.source === 'lite-model' ? 'Prediction completed ' : 'Prediction completed.';
+            statusNode.innerText = data.source === 'lite-model' ? 'Prediction completed' : 'Prediction completed.';
         }
 
         resultDiv.classList.remove('d-none');
