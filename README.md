@@ -232,8 +232,6 @@ pip install -r requirements-local.txt
 python app.py
 ```
 
-
-
 ### Troubleshooting deployed crashes
 
 If Vercel shows `FUNCTION_INVOCATION_FAILED`:
