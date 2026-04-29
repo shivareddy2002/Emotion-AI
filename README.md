@@ -6,6 +6,30 @@ A professional deep learning web application that detects human emotions from te
 
 ---
 
+
+## 🧭 Project Elaboration (Quick Walkthrough)
+
+Emotion-AI is a **production-oriented sentiment understanding app** that combines an NLP model with a Flask UI. In practice, the system works as a pipeline:
+
+1. **User enters free-form text** in the web page (`templates/index.html`).  
+2. **Backend sanitizes text** (lowercasing + regex cleanup) before inference (`app.py`).  
+3. **Inference strategy is selected at runtime**:  
+   - **Local model mode** (TensorFlow assets loaded from disk) for full deep-learning predictions.  
+   - **Remote inference mode** (API forwarding) for lightweight cloud deployment such as Vercel limits.  
+   - **Lexicon fallback mode** for resilient predictions when ML dependencies are unavailable.
+4. **Emotion + confidence** are returned as JSON and rendered instantly in the UI.
+
+### Why this architecture matters
+- **Reliability**: graceful fallback prevents total outage if model/runtime is unavailable.  
+- **Deployability**: remote inference keeps serverless package size small.  
+- **Maintainability**: model assets and app logic are separated (`model_loader.py` vs `app.py`).
+
+### Core repository layout
+- `app.py` → Flask routes, runtime mode switching, normalization, and fallback logic.  
+- `model_loader.py` → loading tokenizer/encoder/model artifacts.  
+- `templates/` + `static/` → web experience (UI, styles, interactions).  
+- `requirements*.txt` → dependency sets for local vs deployment scenarios.
+
 ## 🚀 Features
 
 - 🔮 Real-time emotion prediction  
